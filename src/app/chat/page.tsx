@@ -88,7 +88,6 @@ export default function ChatPage() {
 
     if (inputRef.current) inputRef.current.style.height = "auto";
 
-    // placeholder for the incoming response
     setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
 
     try {
@@ -112,7 +111,6 @@ export default function ChatPage() {
       const dec = new TextDecoder();
       let soFar = "";
 
-      // read SSE stream
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -127,7 +125,7 @@ export default function ChatPage() {
             const { content } = JSON.parse(payload);
             if (content) {
               soFar += content;
-              const snapshot = soFar; // capture for closure
+              const snapshot = soFar;
               setMessages((prev) => {
                 const copy = [...prev];
                 copy[copy.length - 1] = { role: "assistant", content: snapshot };
@@ -138,7 +136,7 @@ export default function ChatPage() {
         }
       }
 
-      fetchConvos(); // refresh sidebar titles
+      fetchConvos();
     } catch (err) {
       console.error(err);
       setMessages((prev) => {
@@ -152,12 +150,16 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="flex h-screen">
+    <div className="flex h-screen bg-[#0c0c0f] text-[#ede9e3] font-mono">
+
       {/* sidebar */}
-      <div className={`${sidebar ? "w-64" : "w-0"} bg-gray-900 border-r border-gray-800 flex flex-col transition-all duration-200 overflow-hidden`}>
-        <div className="p-3 border-b border-gray-800">
-          <button onClick={newConvo} className="w-full py-2 px-3 bg-blue-600 hover:bg-blue-700 rounded text-sm font-medium transition">
-            + New Chat
+      <div className={`${sidebar ? "w-64" : "w-0"} bg-[#131316] border-r border-white/[0.06] flex flex-col transition-all duration-200 overflow-hidden`}>
+        <div className="p-3 border-b border-white/[0.06]">
+          <button
+            onClick={newConvo}
+            className="w-full py-2 px-3 bg-transparent border border-white/10 hover:border-[#c9aa71] hover:text-[#c9aa71] text-[#908c86] rounded-md text-xs transition-colors"
+          >
+            + new conversation
           </button>
         </div>
         <div className="flex-1 overflow-y-auto">
@@ -165,64 +167,80 @@ export default function ChatPage() {
             <button
               key={c.id}
               onClick={() => openConvo(c.id)}
-              className={`w-full text-left px-3 py-2 text-sm truncate hover:bg-gray-800 transition ${
-                activeId === c.id ? "bg-gray-800 text-white" : "text-gray-400"
+              className={`w-full text-left px-4 py-2 text-xs truncate transition-colors border-l-2 ${
+                activeId === c.id
+                  ? "border-[#c9aa71] text-[#e8d5a8] bg-[#c9aa71]/[0.04]"
+                  : "border-transparent text-[#6b6760] hover:bg-[#1a1a1f] hover:text-[#ede9e3]"
               }`}
             >
               {c.title}
             </button>
           ))}
         </div>
-        <div className="p-3 border-t border-gray-800">
+        <div className="p-3 border-t border-white/[0.06]">
           <button
             onClick={() => {
               localStorage.clear();
               router.replace("/login");
             }}
-            className="w-full py-2 text-sm text-gray-400 hover:text-white transition"
+            className="w-full py-2 text-xs text-[#6b6760] hover:text-[#ede9e3] transition-colors"
           >
-            Log out
+            log out
           </button>
         </div>
       </div>
 
       {/* main */}
-      <div className="flex-1 flex flex-col">
-        <div className="h-12 border-b border-gray-800 flex items-center px-4 gap-3">
-          <button onClick={() => setSidebar(!sidebar)} className="text-gray-400 hover:text-white">
+      <div className="flex-1 flex flex-col min-w-0">
+
+        {/* topbar */}
+        <div className="h-12 border-b border-white/[0.06] bg-[#0e0e12] flex items-center px-4 gap-3 flex-shrink-0">
+          <button onClick={() => setSidebar(!sidebar)} className="text-[#6b6760] hover:text-[#ede9e3] transition-colors">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
-          <span className="text-sm text-gray-400 flex-1 truncate">
-            {activeId ? convos.find((c) => c.id === activeId)?.title : "Pick a conversation or start one"}
+          <span className="text-xs text-[#6b6760] flex-1 truncate italic" style={{ fontFamily: "'Fraunces', Georgia, serif", fontWeight: 300 }}>
+            {activeId ? convos.find((c) => c.id === activeId)?.title : "pick a conversation or start one"}
           </span>
+          {isStreaming && (
+            <span className="text-[10px] text-[#8ecf72] bg-[#0f1f12] border border-[#50a050]/20 px-2.5 py-1 rounded">
+              ● streaming
+            </span>
+          )}
           {modelInfo && (
             <a
               href={modelInfo.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1.5 text-xs bg-gray-800 border border-gray-700 rounded-full px-3 py-1 text-gray-400 hover:text-white hover:border-gray-500 transition shrink-0"
+              className="flex items-center gap-1.5 text-[10px] bg-[#1a1a1f] border border-white/[0.06] rounded px-2.5 py-1 text-[#6b6760] hover:text-[#ede9e3] hover:border-white/20 transition-colors shrink-0"
             >
-              <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#8ecf72]" />
               {modelInfo.model.split("/").pop()}
             </a>
           )}
         </div>
 
+        {/* messages */}
         <div className="flex-1 overflow-y-auto px-4 py-6">
-          <div className="max-w-3xl mx-auto space-y-6">
+          <div className="max-w-3xl mx-auto space-y-5">
             {messages.length === 0 && (
-              <div className="text-center text-gray-500 mt-32">
-                <p className="text-lg">What can I help with?</p>
+              <div className="text-center mt-32">
+                <p
+                  className="text-4xl text-[#c9aa71] opacity-40 mb-3"
+                  style={{ fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic", fontWeight: 200 }}
+                >
+                  Dialogue
+                </p>
+                <p className="text-xs text-[#6b6760]">what can I help with?</p>
                 {modelInfo && (
                   <a
                     href={modelInfo.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 mt-3 text-sm text-gray-400 hover:text-white transition"
+                    className="inline-flex items-center gap-2 mt-3 text-xs text-[#6b6760] hover:text-[#ede9e3] transition-colors"
                   >
-                    Powered by <span className="font-medium text-gray-300">{modelInfo.model}</span>
+                    powered by <span className="text-[#908c86]">{modelInfo.model}</span>
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                     </svg>
@@ -233,11 +251,13 @@ export default function ChatPage() {
             {messages.map((msg, i) => (
               <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                 <div
-                  className={`max-w-[80%] rounded-lg px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
-                    msg.role === "user" ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-100"
+                  className={`max-w-[80%] text-xs leading-relaxed whitespace-pre-wrap px-4 py-2.5 ${
+                    msg.role === "user"
+                      ? "bg-[#0f1f12] border border-[#50a050]/20 text-[#8ecf72] rounded-[8px_2px_8px_8px]"
+                      : "bg-[#1a1a1f] border border-white/[0.08] text-[#ede9e3] rounded-[2px_8px_8px_8px]"
                   }`}
                 >
-                  {msg.content || <span className="animate-pulse text-gray-400">...</span>}
+                  {msg.content || <span className="text-[#6b6760] animate-pulse">···</span>}
                 </div>
               </div>
             ))}
@@ -245,8 +265,9 @@ export default function ChatPage() {
           </div>
         </div>
 
-        <div className="border-t border-gray-800 p-4">
-          <div className="max-w-3xl mx-auto flex gap-2">
+        {/* input */}
+        <div className="border-t border-white/[0.06] p-4 flex-shrink-0">
+          <div className="max-w-3xl mx-auto flex gap-2 items-end">
             <textarea
               ref={inputRef}
               value={input}
@@ -258,21 +279,22 @@ export default function ChatPage() {
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
               }}
-              placeholder="Send a message..."
+              placeholder="send a message…"
               rows={1}
-              className="flex-1 resize-none bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-blue-500 placeholder-gray-500"
+              className="flex-1 resize-none bg-[#1a1a1f] border border-white/[0.08] focus:border-[#c9aa71] rounded-lg px-4 py-2.5 text-xs text-[#ede9e3] placeholder-[#6b6760] outline-none transition-colors font-mono"
             />
             <button
               onClick={send}
               disabled={!input.trim() || isStreaming}
-              className="px-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition"
+              className="px-4 py-2.5 bg-[#c9aa71] hover:bg-[#e8d5a8] disabled:opacity-30 disabled:cursor-not-allowed rounded-lg transition-colors flex-shrink-0"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-[#0c0c0f]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19V5m0 0l-7 7m7-7l7 7" />
               </svg>
             </button>
           </div>
         </div>
+
       </div>
     </div>
   );
