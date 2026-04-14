@@ -13,7 +13,6 @@ export async function POST(request: Request) {
 
   const sql = getDb();
 
-  // make sure this convo belongs to the user
   const check = await sql`
     SELECT id FROM conversations WHERE id = ${conversationId} AND user_id = ${user.id}
   `;
@@ -26,7 +25,6 @@ export async function POST(request: Request) {
     VALUES (${conversationId}, 'user', ${message})
   `;
 
-  // grab full history so the model has context
   const history = await sql`
     SELECT role, content FROM messages
     WHERE conversation_id = ${conversationId}
@@ -34,71 +32,46 @@ export async function POST(request: Request) {
   `;
 
   // Convert flat history to completed (user, assistant) turn pairs.
-  // The last row is the current user message (just inserted, no reply yet) — exclude it.
+  // Exclude the last row (current user message, no reply yet).
   const turns: [string, string][] = [];
   const prior = history.slice(0, -1);
   for (let i = 0; i < prior.length - 1; i++) {
     if (prior[i].role === "user" && prior[i + 1].role === "assistant") {
       turns.push([prior[i].content, prior[i + 1].content]);
-      i++; // skip the assistant row we just consumed
+      i++;
     }
   }
 
-  const gatorRes = await fetch(`${process.env.GATORLM_URL}/generate/stream`, {
+  const hfRes = await fetch(process.env.HF_ENDPOINT_URL!, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ turns, message }),
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.HF_TOKEN}`,
+    },
+    body: JSON.stringify({ inputs: { turns, message } }),
   });
 
-  if (!gatorRes.ok) {
-    const txt = await gatorRes.text();
-    console.error(`GatorLM returned ${gatorRes.status}: ${txt}`);
+  if (!hfRes.ok) {
+    const txt = await hfRes.text();
+    console.error(`HF endpoint returned ${hfRes.status}: ${txt}`);
     return NextResponse.json({ error: "Could not reach the model" }, { status: 502 });
   }
 
+  const { reply } = await hfRes.json() as { reply: string };
+
   const enc = new TextEncoder();
-  let fullReply = "";
 
   const stream = new ReadableStream({
     async start(controller) {
-      const reader = gatorRes.body!.getReader();
-      const dec = new TextDecoder();
-      let buffer = "";
-
       try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
+        controller.enqueue(enc.encode(`data: ${JSON.stringify({ content: reply })}\n\n`));
 
-          buffer += dec.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-
-          for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
-            const payload = line.slice(6);
-            if (payload === "[DONE]") continue;
-
-            try {
-              const { content } = JSON.parse(payload);
-              if (content) {
-                fullReply += content;
-                controller.enqueue(enc.encode(`data: ${JSON.stringify({ content })}\n\n`));
-              }
-            } catch {
-              // malformed chunk, skip
-            }
-          }
-        }
-
-        // persist the full response
-        if (fullReply) {
+        if (reply) {
           await sql`
             INSERT INTO messages (conversation_id, role, content)
-            VALUES (${conversationId}, 'assistant', ${fullReply})
+            VALUES (${conversationId}, 'assistant', ${reply})
           `;
 
-          // auto-title based on first user message
           const count = await sql`
             SELECT COUNT(*)::int as n FROM messages WHERE conversation_id = ${conversationId}
           `;
